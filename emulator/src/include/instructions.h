@@ -38,7 +38,7 @@ typedef enum {
   DI,
   RLCA,
 } op_code;
-typedef enum { AM_16, AM_8, AM_R } addressing_mode;
+typedef enum { AM_16, AM_A16, AM_8, AM_R ,AM_IR} addressing_mode;
 typedef enum {
   R_A,
   R_B,

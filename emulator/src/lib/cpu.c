@@ -202,10 +202,112 @@ void instruction_noop() {}
 //       break;
 //   }
 // }
-//
+
+void set_register(reg r, u8 *to) {
+  switch (r) {
+  case R_A:
+    registers.A = *to;
+    break;
+  case R_B:
+    registers.B = *to;
+    break;
+  case R_C:
+    registers.C = *to;
+    break;
+  case R_D:
+    registers.D = *to;
+    break;
+  case R_E:
+    registers.E = *to;
+    break;
+  case R_F:
+    registers.F = *to;
+    break;
+  case R_H:
+    registers.H = *to;
+    break;
+  case R_L:
+    registers.L = *to;
+    break;
+  case R_SP:
+    registers.SP = *to;
+    break;
+  case R_AF:
+    registers.A = to[0];
+    registers.F = to[1];
+    break;
+  case R_BC:
+    registers.B = to[0];
+    registers.C = to[1];
+    break;
+  case R_DE:
+    registers.D = to[0];
+    registers.E = to[1];
+    break;
+  case R_HL:
+    registers.H = to[0];
+    registers.L = to[1];
+    break;
+  }
+}
+
+u16 join_registers(u8 upper, u8 lower) { return (upper << 7) & 0xF0 | lower; };
+
+u16 get_register(reg r) {
+  switch (r) {
+  case R_A:
+    return registers.A;
+  case R_B:
+    return registers.B;
+  case R_C:
+    return registers.C;
+  case R_D:
+    return registers.D;
+  case R_E:
+    return registers.E;
+  case R_F:
+    return registers.F;
+  case R_H:
+    return registers.H;
+  case R_L:
+    return registers.L;
+  case R_SP:
+    return registers.SP;
+  case R_AF:
+    return join_registers(registers.A, registers.F);
+  case R_BC:
+    return join_registers(registers.B, registers.C);
+  case R_DE:
+    return join_registers(registers.D, registers.E);
+  case R_HL:
+    return join_registers(registers.H, registers.L);
+  }
+}
+
+void instruction_load(instruction i) {
+  if (i.address_mode == AM_R) {
+    u8 to = (u8)get_register(i.reg_source);
+    set_register(i.reg_dest, &to);
+    registers.PC += 1;
+    return;
+  }
+
+  u8 *to = ram_read(registers.PC + 1);
+  set_register(i.reg_dest, to);
+  registers.PC += 1;
+
+  if (i.address_mode == AM_16)
+    registers.PC += 1;
+}
 
 void instruction_exec(instruction i) {
-  switch (i.op) {}
+  switch (i.op) {
+  case LD:
+    instruction_load(i);
+    break;
+  default:
+    instruction_noop();
+  }
 }
 
 void cpu_init() {
@@ -222,9 +324,7 @@ void cpu_exec() {
   u8 *ins = ram_read(registers.PC);
   instruction i = get_instruction(*ins);
   instruction_exec(i);
-  //
-  // registers.R_PC += 2;
-  //
+  registers.PC += 1;
 }
 
 void cpu_free() {}
