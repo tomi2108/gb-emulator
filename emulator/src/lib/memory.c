@@ -15,8 +15,19 @@ void ram_write(const u8 *stream, u32 length, u16 offset) {
   memcpy(&ram[offset], stream, length);
 }
 
-u8* ram_read(u16 offset) { 
-  return &ram[offset]; 
+void ram_write8(u16 addr, u8 val) { ram_write(&val, 1, addr); }
+
+void ram_write16(u16 addr, u16 val) {
+  ram_write8(addr, val & 0xFF);     // low byte
+  ram_write8(addr + 1, (val >> 8)); // high byte
+}
+
+u8 ram_read8(u16 offset) { return ram[offset]; }
+
+u16 ram_read16(u16 addr) {
+  u8 low = ram_read8(addr);
+  u8 high = ram_read8(addr + 1);
+  return ((u16)high << 8) | low;
 }
 
 void stack_push(u16 bytes) {
