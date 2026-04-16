@@ -51,6 +51,7 @@ typedef enum {
   R_DE,
   R_HL,
   R_SP,
+  R_PC
 } reg;
 
 void cpu_init();

@@ -25,6 +25,8 @@ void set_reg16(reg r, u16 val) {
   u8 high = (val >> 8) & 0xFF;
   u8 low = val & 0xFF;
   switch (r) {
+  case R_PC:
+    registers.PC = val;
   case R_BC:
     registers.B = high;
     registers.C = low;
@@ -83,6 +85,8 @@ u16 join_registers(u8 upper, u8 lower) { return ((u16)upper << 8) | lower; }
 
 u16 get_reg16(reg r) {
   switch (r) {
+  case R_PC:
+    return registers.PC;
   case R_SP:
     return registers.SP;
   case R_AF:
