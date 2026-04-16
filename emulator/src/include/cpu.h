@@ -67,5 +67,6 @@ u16 get_reg16(reg r);
 void set_reg16(reg r, u16 val);
 
 void set_flag(u8 flag, bool to);
+bool get_flag(u8 flag);
 
 #endif

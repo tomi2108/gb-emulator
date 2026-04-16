@@ -19,6 +19,8 @@ void set_flag(u8 flag, bool to) {
     registers.F &= ~flag;
 }
 
+bool get_flag(u8 flag) { return (registers.F & flag) > 0x00; }
+
 void set_reg16(reg r, u16 val) {
   u8 high = (val >> 8) & 0xFF;
   u8 low = val & 0xFF;

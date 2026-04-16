@@ -5,7 +5,58 @@
 #define HALF_CARRY_FLAG 0b00100000
 #define CARRY_FLAG 0b00010000
 
-void sub(reg dest, u8 val) {
+void XOR(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  int res = a ^ val;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+  set_flag(CARRY_FLAG, false);
+  set_reg8(dest, (u8)res);
+}
+
+void OR(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  int res = a | val;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+  set_flag(CARRY_FLAG, false);
+  set_reg8(dest, (u8)res);
+}
+
+void AND(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  int res = a & val;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, true);
+  set_flag(CARRY_FLAG, false);
+  set_reg8(dest, (u8)res);
+}
+
+void SBC(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  bool carry = get_flag(CARRY_FLAG);
+  u8 sbc = val + carry;
+  int res = a - sbc;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, true);
+  set_flag(HALF_CARRY_FLAG, (a & 0xF) < (val & 0xF));
+  set_flag(CARRY_FLAG, sbc > a);
+  set_reg8(dest, (u8)res);
+}
+
+void CP(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  int res = a - val;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, true);
+  set_flag(HALF_CARRY_FLAG, (a & 0xF) < (val & 0xF));
+  set_flag(CARRY_FLAG, val > a);
+}
+
+void SUB(reg dest, u8 val) {
   u8 a = get_reg8(dest);
   int res = a - val;
   set_flag(ZERO_FLAG, (res & 0xFF) == 0);
@@ -15,7 +66,7 @@ void sub(reg dest, u8 val) {
   set_reg8(dest, (u8)res);
 }
 
-void add(reg dest, u8 val) {
+void ADD(reg dest, u8 val) {
   u8 a = get_reg8(dest);
   int res = a + val;
   set_flag(ZERO_FLAG, (res & 0xFF) == 0);
@@ -48,16 +99,46 @@ void add(reg dest, u8 val) {
   FN(H##F, dest, R_A)
 
 #define ADD_R8_R8(num, dest, src)                                              \
-  void op_##num() { add(dest, get_reg8(src)); };
+  void op_##num() { ADD(dest, get_reg8(src)); };
 
 #define ADD_R8_HL(num, dest)                                                   \
-  void op_##num() { add(dest, ram_read8(get_reg16(R_HL))); };
+  void op_##num() { ADD(dest, ram_read8(get_reg16(R_HL))); };
 
 #define SUB_R8_R8(num, dest, src)                                              \
-  void op_##num() { sub(dest, get_reg8(src)); };
+  void op_##num() { SUB(dest, get_reg8(src)); };
 
 #define SUB_R8_HL(num, dest)                                                   \
-  void op_##num() { sub(dest, ram_read8(get_reg16(R_HL))); };
+  void op_##num() { SUB(dest, ram_read8(get_reg16(R_HL))); };
+
+#define SBC_R8_R8(num, dest, src)                                              \
+  void op_##num() { SBC(dest, get_reg8(src)); };
+
+#define SBC_R8_HL(num, dest)                                                   \
+  void op_##num() { SBC(dest, ram_read8(get_reg16(R_HL))); };
+
+#define AND_R8_R8(num, dest, src)                                              \
+  void op_##num() { AND(dest, get_reg8(src)); };
+
+#define AND_R8_HL(num, dest)                                                   \
+  void op_##num() { AND(dest, ram_read8(get_reg16(R_HL))); };
+
+#define OR_R8_R8(num, dest, src)                                               \
+  void op_##num() { OR(dest, get_reg8(src)); };
+
+#define OR_R8_HL(num, dest)                                                    \
+  void op_##num() { OR(dest, ram_read8(get_reg16(R_HL))); };
+
+#define XOR_R8_R8(num, dest, src)                                              \
+  void op_##num() { XOR(dest, get_reg8(src)); };
+
+#define XOR_R8_HL(num, dest)                                                   \
+  void op_##num() { XOR(dest, ram_read8(get_reg16(R_HL))); };
+
+#define CP_R8_R8(num, dest, src)                                              \
+  void op_##num() { CP(dest, get_reg8(src)); };
+
+#define CP_R8_HL(num, dest)                                                   \
+  void op_##num() { CP(dest, ram_read8(get_reg16(R_HL))); };
 
 #define LD_R8_R8(num, dest, src)                                               \
   void op_##num() { set_reg8(dest, get_reg8(src)); };
@@ -93,6 +174,13 @@ ROW_LOW(ADD_R8_R8, ADD_R8_HL, 8, R_A);
 ROW_HIGH(ADD_R8_R8, ADD_R8_HL, 8, R_A);
 
 ROW_LOW(SUB_R8_R8, SUB_R8_HL, 9, R_A);
+ROW_HIGH(SBC_R8_R8, SBC_R8_HL, 9, R_A);
+
+ROW_LOW(AND_R8_R8, AND_R8_HL, A, R_A);
+ROW_HIGH(XOR_R8_R8, XOR_R8_HL, A, R_A);
+
+ROW_LOW(OR_R8_R8, OR_R8_HL, B, R_A);
+ROW_HIGH(CP_R8_R8, CP_R8_HL, B, R_A);
 
 typedef void (*op_func)(void);
 
