@@ -37,13 +37,13 @@ void AND(reg dest, u8 val) {
 
 void SBC(reg dest, u8 val) {
   u8 a = get_reg8(dest);
-  bool carry = get_flag(CARRY_FLAG);
-  u8 sbc = val + carry;
-  int res = a - sbc;
+  int carry = get_flag(CARRY_FLAG) ? 1 : 0;
+  int res = a - val - carry;
+
   set_flag(ZERO_FLAG, (res & 0xFF) == 0);
   set_flag(SUB_FLAG, true);
-  set_flag(HALF_CARRY_FLAG, (a & 0xF) < (val & 0xF));
-  set_flag(CARRY_FLAG, sbc > a);
+  set_flag(HALF_CARRY_FLAG, ((a & 0xF) - (val & 0xF) - carry) < 0);
+  set_flag(CARRY_FLAG, res < 0);
   set_reg8(dest, (u8)res);
 }
 
@@ -134,10 +134,10 @@ void ADD(reg dest, u8 val) {
 #define XOR_R8_HL(num, dest)                                                   \
   void op_##num() { XOR(dest, ram_read8(get_reg16(R_HL))); };
 
-#define CP_R8_R8(num, dest, src)                                              \
+#define CP_R8_R8(num, dest, src)                                               \
   void op_##num() { CP(dest, get_reg8(src)); };
 
-#define CP_R8_HL(num, dest)                                                   \
+#define CP_R8_HL(num, dest)                                                    \
   void op_##num() { CP(dest, ram_read8(get_reg16(R_HL))); };
 
 #define LD_R8_R8(num, dest, src)                                               \
@@ -149,12 +149,79 @@ void ADD(reg dest, u8 val) {
 #define LD_HL_R8(num, src)                                                     \
   void op_##num() { ram_write8(get_reg16(R_HL), get_reg8(src)); };
 
+#define LD_R16_N16(num, dest)                                                  \
+  void op_##num() { set_reg16(dest, get_imm16()); };
+
+#define LD_R16_A(num, src)                                                     \
+  void op_##num() { ram_write8(get_reg16(src), get_reg8(R_A)); };
+
+#define LD_A_R16(num, src)                                                     \
+  void op_##num() { set_reg8(R_A, ram_read8(get_reg16(src))); }
+
+#define LD_N16_A(num)                                                          \
+  void op_##num() { ram_write8(get_imm16(), get_reg8(R_A)); };
+
+#define LD_R8_N8(num, dest)                                                    \
+  void op_##num() { set_reg8(dest, get_imm8()); };
+
+#define LD_HL_N8(num)                                                          \
+  void op_##num() { ram_write8(get_reg16(R_HL), get_imm8()); };
+
 void op_00() {}
+LD_R16_N16(01, R_BC);
+LD_R16_A(02, R_BC);
+LD_R8_N8(06, R_B);
+void op_08() {
+  u16 addr = get_imm16();
+  u16 sp = get_reg16(R_SP);
+  ram_write8(addr, sp & 0xFF);
+  ram_write8(addr + 1, (sp >> 8));
+}
+LD_A_R16(0A, R_BC);
+LD_R8_N8(0E, R_C);
+
+LD_R16_N16(11, R_DE);
+LD_R16_A(12, R_DE);
+LD_R8_N8(16, R_D);
+LD_A_R16(1A, R_DE);
+LD_R8_N8(1E, R_E);
+
+LD_R16_N16(21, R_HL);
+void op_22() {
+  u16 hl = get_reg16(R_HL);
+  ram_write8(hl, get_reg8(R_A));
+  set_reg16(R_HL, hl + 1);
+}
+LD_R8_N8(26, R_H);
+void op_2A() {
+  u16 hl = get_reg16(R_HL);
+  u8 val = ram_read8(hl);
+  set_reg16(R_HL, hl + 1);
+  set_reg8(R_A, val);
+}
+LD_R8_N8(2E, R_L);
+
+LD_R16_N16(31, R_SP);
+void op_32() {
+  u16 hl = get_reg16(R_HL);
+  ram_write8(hl, get_reg8(R_A));
+  set_reg16(R_HL, hl - 1);
+}
+void op_36() { ram_write8(get_reg16(R_HL), get_imm8()); }
+void op_3A() {
+  u16 hl = get_reg16(R_HL);
+  u8 val = ram_read8(hl);
+  set_reg16(R_HL, hl - 1);
+  set_reg8(R_A, val);
+}
+LD_R8_N8(3E, R_A);
 
 ROW_LOW(LD_R8_R8, LD_R8_HL, 4, R_B);
 ROW_HIGH(LD_R8_R8, LD_R8_HL, 4, R_C);
+
 ROW_LOW(LD_R8_R8, LD_R8_HL, 5, R_D);
 ROW_HIGH(LD_R8_R8, LD_R8_HL, 5, R_E);
+
 ROW_LOW(LD_R8_R8, LD_R8_HL, 6, R_H);
 ROW_HIGH(LD_R8_R8, LD_R8_HL, 6, R_L);
 
@@ -181,6 +248,26 @@ ROW_HIGH(XOR_R8_R8, XOR_R8_HL, A, R_A);
 
 ROW_LOW(OR_R8_R8, OR_R8_HL, B, R_A);
 ROW_HIGH(CP_R8_R8, CP_R8_HL, B, R_A);
+
+void op_E2() { ram_write8(0xFF00 | get_reg8(R_C), get_reg8(R_A)); }
+void op_E0() { ram_write8(0xFF00 | get_imm8(), get_reg8(R_A)); }
+void op_EA() { ram_write8(get_imm16(), get_reg8(R_A)); }
+
+void op_F0() { set_reg8(R_A, ram_read8(0xFF00 | get_imm8())); }
+void op_F2() { set_reg8(R_A, ram_read8(0xFF00 | get_reg8(R_C))); }
+void op_FA() { set_reg8(R_A, ram_read8(get_imm16())); }
+void op_F8() {
+  u8 imm = get_imm8();
+  int8_t e8 = (int8_t)imm;
+  u16 sp = get_reg16(R_SP);
+  u16 res = sp + e8;
+  set_reg16(R_HL, res);
+  set_flag(ZERO_FLAG, false);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, (sp & 0xF) + (imm & 0xF) > 0xF);
+  set_flag(CARRY_FLAG, (sp & 0xFF) + (imm & 0xFF) > 0xFF);
+}
+void op_F9() { set_reg16(R_SP, get_reg16(R_HL)); }
 
 typedef void (*op_func)(void);
 

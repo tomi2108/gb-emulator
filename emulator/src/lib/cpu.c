@@ -122,10 +122,11 @@ u8 get_reg8(reg r) {
 }
 
 u16 get_imm16() {
-  u16 val = ram_read16(registers.PC);
+  u8 low = ram_read8(registers.PC);
   cpu_advance();
+  u8 high = ram_read8(registers.PC);
   cpu_advance();
-  return val;
+  return (u16)high << 8 | low;
 };
 
 u8 get_imm8() {
