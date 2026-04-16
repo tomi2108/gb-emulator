@@ -2,7 +2,6 @@
 #define CPU_H_
 
 #include "common.h"
-#include "instructions.h"
 #include "keypad.h"
 #include "memory.h"
 #include "ppu.h"
@@ -34,9 +33,39 @@ typedef struct {
   u16 SP;
 } regs;
 
-void cpu_init();
+typedef enum {
+  R_NONE,
 
+  // 8-bit
+  R_A,
+  R_B,
+  R_C,
+  R_D,
+  R_E,
+  R_H,
+  R_L,
+
+  // 16-bit
+  R_AF,
+  R_BC,
+  R_DE,
+  R_HL,
+  R_SP,
+} reg;
+
+void cpu_init();
+void cpu_advance();
 void cpu_free();
-void cpu_exec();
+
+u8 get_imm8();
+u16 get_imm16();
+
+u8 get_reg8(reg r);
+void set_reg8(reg r, u8 val);
+
+u16 get_reg16(reg r);
+void set_reg16(reg r, u16 val);
+
+void set_flag(u8 flag, bool to);
 
 #endif

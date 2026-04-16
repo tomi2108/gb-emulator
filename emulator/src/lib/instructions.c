@@ -1,301 +1,186 @@
 #include "../include/instructions.h"
 
-#define NONE                                                                   \
-  (operand) { OT_NONE, R_NONE }
-#define REG(r)                                                                 \
-  (operand) { OT_REG, r }
-#define REG16(r)                                                               \
-  (operand) { OT_REG16, r }
-#define IMM8                                                                   \
-  (operand) { OT_IMM8, R_NONE }
-#define IMM16                                                                  \
-  (operand) { OT_IMM16, R_NONE }
-#define MEM_REG(r)                                                             \
-  (operand) { OT_MEM_REG, r }
-#define MEM_IMM16                                                              \
-  (operand) { OT_MEM_IMM16, R_NONE }
-#define MEM_IMM8                                                               \
-  (operand) { OT_MEM_IMM8, R_NONE }
-#define MEM_C                                                                  \
-  (operand) { OT_MEM_C, R_C }
-#define MEM_REG_INC(r)                                                         \
-  (operand) { OT_MEM_REG_INC, r }
-#define MEM_REG_DEC(r)                                                         \
-  (operand) { OT_MEM_REG_DEC, r }
+#define ZERO_FLAG 0b10000000
+#define SUB_FLAG 0b01000000
+#define HALF_CARRY_FLAG 0b00100000
+#define CARRY_FLAG 0b00010000
 
-instruction instruction_table[] = {
-    [0x00] = {NOP, NONE, NONE},
-    [0x01] = {LD, REG16(R_BC), IMM16},
-    [0x02] = {LD, MEM_REG(R_BC), REG(R_A)},
-    [0x03] = {INC, REG16(R_BC), NONE},
-    [0x04] = {INC, REG(R_B), NONE},
-    [0x05] = {DEC, REG(R_B), NONE},
-    [0x06] = {LD, REG(R_B), IMM8},
-    [0x07] = {RLCA, NONE, NONE},
-    [0x08] = {LD, MEM_IMM16, REG16(R_SP)},
-    [0x09] = {ADD, REG16(R_HL), REG16(R_BC)},
-    [0x0A] = {LD, REG(R_A), MEM_REG(R_BC)},
-    [0x0B] = {DEC, REG16(R_BC), NONE},
-    [0x0C] = {INC, REG(R_C), NONE},
-    [0x0D] = {DEC, REG(R_C), NONE},
-    [0x0E] = {LD, REG(R_C), IMM8},
-    [0x0F] = {RRCA, NONE, NONE},
+void sub(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  int res = a - val;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, true);
+  set_flag(HALF_CARRY_FLAG, (a & 0xF) < (val & 0xF));
+  set_flag(CARRY_FLAG, val > a);
+  set_reg8(dest, (u8)res);
+}
 
-    [0x10] = {STOP, IMM8, NONE},
-    [0x11] = {LD, REG16(R_DE), IMM16},
-    [0x12] = {LD, MEM_REG(R_DE), REG(R_A)},
-    [0x13] = {INC, REG16(R_DE), NONE},
-    [0x14] = {INC, REG(R_D), NONE},
-    [0x15] = {DEC, REG(R_D), NONE},
-    [0x16] = {LD, REG(R_D), IMM8},
-    [0x17] = {RLA, NONE, NONE},
-    [0x18] = {JR, IMM8, NONE},
-    [0x19] = {ADD, REG16(R_HL), REG16(R_DE)},
-    [0x1A] = {LD, REG(R_A), MEM_REG(R_DE)},
-    [0x1B] = {DEC, REG16(R_DE), NONE},
-    [0x1C] = {INC, REG(R_E), NONE},
-    [0x1D] = {DEC, REG(R_E), NONE},
-    [0x1E] = {LD, REG(R_E), IMM8},
-    [0x1F] = {RRA, NONE, NONE},
+void add(reg dest, u8 val) {
+  u8 a = get_reg8(dest);
+  int res = a + val;
+  set_flag(ZERO_FLAG, (res & 0xFF) == 0);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, (a & 0xF) + (val & 0xF) > 0xF);
+  set_flag(CARRY_FLAG, res > 0xFF);
+  set_reg8(dest, (u8)res);
+}
 
-    [0x20] = {JR_NZ, IMM8, NONE},
-    [0x21] = {LD, REG16(R_HL), IMM16},
-    [0x22] = {LD, MEM_REG_INC(R_HL), REG(R_A)},
-    [0x23] = {INC, REG16(R_HL), NONE},
-    [0x24] = {INC, REG(R_H), NONE},
-    [0x25] = {DEC, REG(R_H), NONE},
-    [0x26] = {LD, REG(R_H), IMM8},
-    [0x27] = {DAA, NONE, NONE},
-    [0x28] = {JR_Z, IMM8, NONE},
-    [0x29] = {ADD, REG16(R_HL), REG16(R_HL)},
-    [0x2A] = {LD, REG(R_A), MEM_REG_INC(R_HL)},
-    [0x2B] = {DEC, REG16(R_HL), NONE},
-    [0x2C] = {INC, REG(R_L), NONE},
-    [0x2D] = {DEC, REG(R_L), NONE},
-    [0x2E] = {LD, REG(R_L), IMM8},
-    [0x2F] = {CPL, NONE, NONE},
+#define OP_ENTRY(num) [0x##num] = op_##num
 
-    [0x30] = {JR_NC, IMM8, NONE},
-    [0x31] = {LD, REG16(R_SP), IMM16},
-    [0x32] = {LD, MEM_REG_DEC(R_HL), REG(R_A)},
-    [0x33] = {INC, REG16(R_SP), NONE},
-    [0x34] = {INC, MEM_REG(R_HL), NONE},
-    [0x35] = {DEC, MEM_REG(R_HL), NONE},
-    [0x36] = {LD, MEM_REG(R_HL), IMM8},
-    [0x37] = {SCF, NONE, NONE},
-    [0x38] = {JR_C, IMM8, NONE},
-    [0x39] = {ADD, REG16(R_HL), REG16(R_SP)},
-    [0x3A] = {LD, REG(R_A), MEM_REG_DEC(R_HL)},
-    [0x3B] = {DEC, REG16(R_SP), NONE},
-    [0x3C] = {INC, REG(R_A), NONE},
-    [0x3D] = {DEC, REG(R_A), NONE},
-    [0x3E] = {LD, REG(R_A), IMM8},
-    [0x3F] = {CCF, NONE, NONE},
+#define ROW_LOW(FN, MEM_FN, H, dest)                                           \
+  FN(H##0, dest, R_B)                                                          \
+  FN(H##1, dest, R_C)                                                          \
+  FN(H##2, dest, R_D)                                                          \
+  FN(H##3, dest, R_E)                                                          \
+  FN(H##4, dest, R_H)                                                          \
+  FN(H##5, dest, R_L)                                                          \
+  MEM_FN(H##6, dest)                                                           \
+  FN(H##7, dest, R_A)
 
-    [0x40] = {LD, REG(R_B), REG(R_B)},
-    [0x41] = {LD, REG(R_B), REG(R_C)},
-    [0x42] = {LD, REG(R_B), REG(R_D)},
-    [0x43] = {LD, REG(R_B), REG(R_E)},
-    [0x44] = {LD, REG(R_B), REG(R_H)},
-    [0x45] = {LD, REG(R_B), REG(R_L)},
-    [0x46] = {LD, REG(R_B), MEM_REG(R_HL)},
-    [0x47] = {LD, REG(R_B), REG(R_A)},
-    [0x48] = {LD, REG(R_C), REG(R_B)},
-    [0x49] = {LD, REG(R_C), REG(R_C)},
-    [0x4A] = {LD, REG(R_C), REG(R_D)},
-    [0x4B] = {LD, REG(R_C), REG(R_E)},
-    [0x4C] = {LD, REG(R_C), REG(R_H)},
-    [0x4D] = {LD, REG(R_C), REG(R_L)},
-    [0x4E] = {LD, REG(R_C), MEM_REG(R_HL)},
-    [0x4F] = {LD, REG(R_C), REG(R_A)},
+#define ROW_HIGH(FN, MEM_FN, H, dest)                                          \
+  FN(H##8, dest, R_B)                                                          \
+  FN(H##9, dest, R_C)                                                          \
+  FN(H##A, dest, R_D)                                                          \
+  FN(H##B, dest, R_E)                                                          \
+  FN(H##C, dest, R_H)                                                          \
+  FN(H##D, dest, R_L)                                                          \
+  MEM_FN(H##E, dest)                                                           \
+  FN(H##F, dest, R_A)
 
-    [0x50] = {LD, REG(R_D), REG(R_B)},
-    [0x51] = {LD, REG(R_D), REG(R_C)},
-    [0x52] = {LD, REG(R_D), REG(R_D)},
-    [0x53] = {LD, REG(R_D), REG(R_E)},
-    [0x54] = {LD, REG(R_D), REG(R_H)},
-    [0x55] = {LD, REG(R_D), REG(R_L)},
-    [0x56] = {LD, REG(R_D), MEM_REG(R_HL)},
-    [0x57] = {LD, REG(R_D), REG(R_A)},
-    [0x58] = {LD, REG(R_E), REG(R_B)},
-    [0x59] = {LD, REG(R_E), REG(R_C)},
-    [0x5A] = {LD, REG(R_E), REG(R_D)},
-    [0x5B] = {LD, REG(R_E), REG(R_E)},
-    [0x5C] = {LD, REG(R_E), REG(R_H)},
-    [0x5D] = {LD, REG(R_E), REG(R_L)},
-    [0x5E] = {LD, REG(R_E), MEM_REG(R_HL)},
-    [0x5F] = {LD, REG(R_E), REG(R_A)},
+#define ADD_R8_R8(num, dest, src)                                              \
+  void op_##num() { add(dest, get_reg8(src)); };
 
-    [0x60] = {LD, REG(R_H), REG(R_B)},
-    [0x61] = {LD, REG(R_H), REG(R_C)},
-    [0x62] = {LD, REG(R_H), REG(R_D)},
-    [0x63] = {LD, REG(R_H), REG(R_E)},
-    [0x64] = {LD, REG(R_H), REG(R_H)},
-    [0x65] = {LD, REG(R_H), REG(R_L)},
-    [0x66] = {LD, REG(R_H), MEM_REG(R_HL)},
-    [0x67] = {LD, REG(R_H), REG(R_A)},
-    [0x68] = {LD, REG(R_L), REG(R_B)},
-    [0x69] = {LD, REG(R_L), REG(R_C)},
-    [0x6A] = {LD, REG(R_L), REG(R_D)},
-    [0x6B] = {LD, REG(R_L), REG(R_E)},
-    [0x6C] = {LD, REG(R_L), REG(R_H)},
-    [0x6D] = {LD, REG(R_L), REG(R_L)},
-    [0x6E] = {LD, REG(R_L), MEM_REG(R_HL)},
-    [0x6F] = {LD, REG(R_L), REG(R_A)},
+#define ADD_R8_HL(num, dest)                                                   \
+  void op_##num() { add(dest, ram_read8(get_reg16(R_HL))); };
 
-    [0x70] = {LD, MEM_REG(R_HL), REG(R_B)},
-    [0x71] = {LD, MEM_REG(R_HL), REG(R_C)},
-    [0x72] = {LD, MEM_REG(R_HL), REG(R_D)},
-    [0x73] = {LD, MEM_REG(R_HL), REG(R_E)},
-    [0x74] = {LD, MEM_REG(R_HL), REG(R_H)},
-    [0x75] = {LD, MEM_REG(R_HL), REG(R_L)},
-    [0x76] = {HALT, NONE, NONE},
-    [0x77] = {LD, MEM_REG(R_HL), REG(R_A)},
-    [0x78] = {LD, REG(R_A), REG(R_B)},
-    [0x79] = {LD, REG(R_A), REG(R_C)},
-    [0x7A] = {LD, REG(R_A), REG(R_D)},
-    [0x7B] = {LD, REG(R_A), REG(R_E)},
-    [0x7C] = {LD, REG(R_A), REG(R_H)},
-    [0x7D] = {LD, REG(R_A), REG(R_L)},
-    [0x7E] = {LD, REG(R_A), MEM_REG(R_HL)},
-    [0x7F] = {LD, REG(R_A), REG(R_A)},
+#define SUB_R8_R8(num, dest, src)                                              \
+  void op_##num() { sub(dest, get_reg8(src)); };
 
-    [0x80] = {ADD, REG(R_A), REG(R_B)},
-    [0x81] = {ADD, REG(R_A), REG(R_C)},
-    [0x82] = {ADD, REG(R_A), REG(R_D)},
-    [0x83] = {ADD, REG(R_A), REG(R_E)},
-    [0x84] = {ADD, REG(R_A), REG(R_H)},
-    [0x85] = {ADD, REG(R_A), REG(R_L)},
-    [0x86] = {ADD, REG(R_A), MEM_REG(R_HL)},
-    [0x87] = {ADD, REG(R_A), REG(R_A)},
-    [0x88] = {ADC, REG(R_A), REG(R_B)},
-    [0x89] = {ADC, REG(R_A), REG(R_C)},
-    [0x8A] = {ADC, REG(R_A), REG(R_D)},
-    [0x8B] = {ADC, REG(R_A), REG(R_E)},
-    [0x8C] = {ADC, REG(R_A), REG(R_H)},
-    [0x8D] = {ADC, REG(R_A), REG(R_L)},
-    [0x8E] = {ADC, REG(R_A), MEM_REG(R_HL)},
-    [0x8F] = {ADC, REG(R_A), REG(R_A)},
+#define SUB_R8_HL(num, dest)                                                   \
+  void op_##num() { sub(dest, ram_read8(get_reg16(R_HL))); };
 
-    [0x90] = {SUB, REG(R_A), REG(R_B)},
-    [0x91] = {SUB, REG(R_A), REG(R_C)},
-    [0x92] = {SUB, REG(R_A), REG(R_D)},
-    [0x93] = {SUB, REG(R_A), REG(R_E)},
-    [0x94] = {SUB, REG(R_A), REG(R_H)},
-    [0x95] = {SUB, REG(R_A), REG(R_L)},
-    [0x96] = {SUB, REG(R_A), MEM_REG(R_HL)},
-    [0x97] = {SUB, REG(R_A), REG(R_A)},
-    [0x98] = {SBC, REG(R_A), REG(R_B)},
-    [0x99] = {SBC, REG(R_A), REG(R_C)},
-    [0x9A] = {SBC, REG(R_A), REG(R_D)},
-    [0x9B] = {SBC, REG(R_A), REG(R_E)},
-    [0x9C] = {SBC, REG(R_A), REG(R_H)},
-    [0x9D] = {SBC, REG(R_A), REG(R_L)},
-    [0x9E] = {SBC, REG(R_A), MEM_REG(R_HL)},
-    [0x9F] = {SBC, REG(R_A), REG(R_A)},
+#define LD_R8_R8(num, dest, src)                                               \
+  void op_##num() { set_reg8(dest, get_reg8(src)); };
 
-    [0xA0] = {AND, REG(R_A), REG(R_B)},
-    [0xA1] = {AND, REG(R_A), REG(R_C)},
-    [0xA2] = {AND, REG(R_A), REG(R_D)},
-    [0xA3] = {AND, REG(R_A), REG(R_E)},
-    [0xA4] = {AND, REG(R_A), REG(R_H)},
-    [0xA5] = {AND, REG(R_A), REG(R_L)},
-    [0xA6] = {AND, REG(R_A), MEM_REG(R_HL)},
-    [0xA7] = {AND, REG(R_A), REG(R_A)},
-    [0xA8] = {XOR, REG(R_A), REG(R_B)},
-    [0xA9] = {XOR, REG(R_A), REG(R_C)},
-    [0xAA] = {XOR, REG(R_A), REG(R_D)},
-    [0xAB] = {XOR, REG(R_A), REG(R_E)},
-    [0xAC] = {XOR, REG(R_A), REG(R_H)},
-    [0xAD] = {XOR, REG(R_A), REG(R_L)},
-    [0xAE] = {XOR, REG(R_A), MEM_REG(R_HL)},
-    [0xAF] = {XOR, REG(R_A), REG(R_A)},
+#define LD_R8_HL(num, dest)                                                    \
+  void op_##num() { set_reg8(dest, ram_read8(get_reg16(R_HL))); };
 
-    [0xB0] = {OR, REG(R_A), REG(R_B)},
-    [0xB1] = {OR, REG(R_A), REG(R_C)},
-    [0xB2] = {OR, REG(R_A), REG(R_D)},
-    [0xB3] = {OR, REG(R_A), REG(R_E)},
-    [0xB4] = {OR, REG(R_A), REG(R_H)},
-    [0xB5] = {OR, REG(R_A), REG(R_L)},
-    [0xB6] = {OR, REG(R_A), MEM_REG(R_HL)},
-    [0xB7] = {OR, REG(R_A), REG(R_A)},
-    [0xB8] = {CP, REG(R_A), REG(R_B)},
-    [0xB9] = {CP, REG(R_A), REG(R_C)},
-    [0xBA] = {CP, REG(R_A), REG(R_D)},
-    [0xBB] = {CP, REG(R_A), REG(R_E)},
-    [0xBC] = {CP, REG(R_A), REG(R_H)},
-    [0xBD] = {CP, REG(R_A), REG(R_L)},
-    [0xBE] = {CP, REG(R_A), MEM_REG(R_HL)},
-    [0xBF] = {CP, REG(R_A), REG(R_A)},
+#define LD_HL_R8(num, src)                                                     \
+  void op_##num() { ram_write8(get_reg16(R_HL), get_reg8(src)); };
 
-    [0xC0] = {RET_NZ, NONE, NONE},
-    [0xC1] = {POP, REG16(R_BC), NONE},
-    [0xC2] = {JP_NZ, IMM16, NONE},
-    [0xC3] = {JP, IMM16, NONE},
-    [0xC4] = {CALL_NZ, IMM16, NONE},
-    [0xC5] = {PUSH, REG16(R_BC), NONE},
-    [0xC6] = {ADD, REG(R_A), IMM8},
-    [0xC7] = {RST, IMM8, NONE},
-    [0xC8] = {RET_Z, NONE, NONE},
-    [0xC9] = {RET, NONE, NONE},
-    [0xCA] = {JP_Z, IMM16, NONE},
-    [0xCB] = {PREFIX, NONE, NONE},
-    [0xCC] = {CALL_Z, IMM16, NONE},
-    [0xCD] = {CALL, IMM16, NONE},
-    [0xCE] = {ADC, REG(R_A), IMM8},
-    [0xCF] = {RST, IMM8, NONE},
+void op_00() {}
 
-    [0xD0] = {RET_NC, NONE, NONE},
-    [0xD1] = {POP, REG16(R_DE), NONE},
-    [0xD2] = {JP_NC, IMM16, NONE},
-    [0xD3] = {NOP, NONE, NONE},
-    [0xD4] = {CALL_NC, IMM16, NONE},
-    [0xD5] = {PUSH, REG16(R_DE), NONE},
-    [0xD6] = {SUB, REG(R_A), IMM8},
-    [0xD7] = {RST, IMM8, NONE},
-    [0xD8] = {RET_C, NONE, NONE},
-    [0xD9] = {RETI, NONE, NONE},
-    [0xDA] = {JP_C, IMM16, NONE},
-    [0xDB] = {NOP, NONE, NONE},
-    [0xDC] = {CALL_C, IMM16, NONE},
-    [0xDD] = {NOP, NONE, NONE},
-    [0xDE] = {SBC, REG(R_A), IMM8},
-    [0xDF] = {RST, IMM8, NONE},
+ROW_LOW(LD_R8_R8, LD_R8_HL, 4, R_B);
+ROW_HIGH(LD_R8_R8, LD_R8_HL, 4, R_C);
+ROW_LOW(LD_R8_R8, LD_R8_HL, 5, R_D);
+ROW_HIGH(LD_R8_R8, LD_R8_HL, 5, R_E);
+ROW_LOW(LD_R8_R8, LD_R8_HL, 6, R_H);
+ROW_HIGH(LD_R8_R8, LD_R8_HL, 6, R_L);
 
-    [0xE0] = {LDH, MEM_IMM8, REG(R_A)},
-    [0xE1] = {POP, REG16(R_HL), NONE},
-    [0xE2] = {LD, MEM_C, REG(R_A)},
-    [0xE3] = {NOP, NONE, NONE},
-    [0xE4] = {NOP, NONE, NONE},
-    [0xE5] = {PUSH, REG16(R_HL), NONE},
-    [0xE6] = {AND, REG(R_A), IMM8},
-    [0xE7] = {RST, IMM8, NONE},
-    [0xE8] = {ADD_SP, IMM8, NONE},
-    [0xE9] = {JP_HL, NONE, NONE},
-    [0xEA] = {LD, MEM_IMM16, REG(R_A)},
-    [0xEB] = {NOP, NONE, NONE},
-    [0xEC] = {NOP, NONE, NONE},
-    [0xED] = {NOP, NONE, NONE},
-    [0xEE] = {XOR, REG(R_A), IMM8},
-    [0xEF] = {RST, IMM8, NONE},
+LD_HL_R8(70, R_B);
+LD_HL_R8(71, R_C)
+LD_HL_R8(72, R_D);
+LD_HL_R8(73, R_E)
+LD_HL_R8(74, R_H);
+LD_HL_R8(75, R_L)
+void op_76() {
+  // TODO: HALT
+}
+LD_HL_R8(77, R_A)
+ROW_HIGH(LD_R8_R8, LD_R8_HL, 7, R_A);
 
-    [0xF0] = {LDH, REG(R_A), MEM_IMM8},
-    [0xF1] = {POP, REG16(R_AF), NONE},
-    [0xF2] = {LD, REG(R_A), MEM_C},
-    [0xF3] = {DI, NONE, NONE},
-    [0xF4] = {NOP, NONE, NONE},
-    [0xF5] = {PUSH, REG16(R_AF), NONE},
-    [0xF6] = {OR, REG(R_A), IMM8},
-    [0xF7] = {RST, IMM8, NONE},
-    [0xF8] = {LD_HL_SP, IMM8, NONE},
-    [0xF9] = {LD_SP_HL, NONE, NONE},
-    [0xFA] = {LD, REG(R_A), MEM_IMM16},
-    [0xFB] = {EI, NONE, NONE},
-    [0xFC] = {NOP, NONE, NONE},
-    [0xFD] = {NOP, NONE, NONE},
-    [0xFE] = {CP, REG(R_A), IMM8},
-    [0xFF] = {RST, IMM8, NONE},
+ROW_LOW(ADD_R8_R8, ADD_R8_HL, 8, R_A);
+ROW_HIGH(ADD_R8_R8, ADD_R8_HL, 8, R_A);
 
+ROW_LOW(SUB_R8_R8, SUB_R8_HL, 9, R_A);
+
+typedef void (*op_func)(void);
+
+op_func instruction_table[] = {
+    OP_ENTRY(00), OP_ENTRY(01), OP_ENTRY(02), OP_ENTRY(03),
+    OP_ENTRY(04), OP_ENTRY(05), OP_ENTRY(06), OP_ENTRY(07),
+    OP_ENTRY(08), OP_ENTRY(09), OP_ENTRY(0A), OP_ENTRY(0B),
+    OP_ENTRY(0C), OP_ENTRY(0D), OP_ENTRY(0E), OP_ENTRY(0F),
+
+    OP_ENTRY(10), OP_ENTRY(11), OP_ENTRY(12), OP_ENTRY(13),
+    OP_ENTRY(14), OP_ENTRY(15), OP_ENTRY(16), OP_ENTRY(17),
+    OP_ENTRY(18), OP_ENTRY(19), OP_ENTRY(1A), OP_ENTRY(1B),
+    OP_ENTRY(1C), OP_ENTRY(1D), OP_ENTRY(1E), OP_ENTRY(1F),
+
+    OP_ENTRY(20), OP_ENTRY(21), OP_ENTRY(22), OP_ENTRY(23),
+    OP_ENTRY(24), OP_ENTRY(25), OP_ENTRY(26), OP_ENTRY(27),
+    OP_ENTRY(28), OP_ENTRY(29), OP_ENTRY(2A), OP_ENTRY(2B),
+    OP_ENTRY(2C), OP_ENTRY(2D), OP_ENTRY(2E), OP_ENTRY(2F),
+
+    OP_ENTRY(30), OP_ENTRY(31), OP_ENTRY(32), OP_ENTRY(33),
+    OP_ENTRY(34), OP_ENTRY(35), OP_ENTRY(36), OP_ENTRY(37),
+    OP_ENTRY(38), OP_ENTRY(39), OP_ENTRY(3A), OP_ENTRY(3B),
+    OP_ENTRY(3C), OP_ENTRY(3D), OP_ENTRY(3E), OP_ENTRY(3F),
+
+    OP_ENTRY(40), OP_ENTRY(41), OP_ENTRY(42), OP_ENTRY(43),
+    OP_ENTRY(44), OP_ENTRY(45), OP_ENTRY(46), OP_ENTRY(47),
+    OP_ENTRY(48), OP_ENTRY(49), OP_ENTRY(4A), OP_ENTRY(4B),
+    OP_ENTRY(4C), OP_ENTRY(4D), OP_ENTRY(4E), OP_ENTRY(4F),
+
+    OP_ENTRY(50), OP_ENTRY(51), OP_ENTRY(52), OP_ENTRY(53),
+    OP_ENTRY(54), OP_ENTRY(55), OP_ENTRY(56), OP_ENTRY(57),
+    OP_ENTRY(58), OP_ENTRY(59), OP_ENTRY(5A), OP_ENTRY(5B),
+    OP_ENTRY(5C), OP_ENTRY(5D), OP_ENTRY(5E), OP_ENTRY(5F),
+
+    OP_ENTRY(60), OP_ENTRY(61), OP_ENTRY(62), OP_ENTRY(63),
+    OP_ENTRY(64), OP_ENTRY(65), OP_ENTRY(66), OP_ENTRY(67),
+    OP_ENTRY(68), OP_ENTRY(69), OP_ENTRY(6A), OP_ENTRY(6B),
+    OP_ENTRY(6C), OP_ENTRY(6D), OP_ENTRY(6E), OP_ENTRY(6F),
+
+    OP_ENTRY(70), OP_ENTRY(71), OP_ENTRY(72), OP_ENTRY(73),
+    OP_ENTRY(74), OP_ENTRY(75), OP_ENTRY(76), OP_ENTRY(77),
+    OP_ENTRY(78), OP_ENTRY(79), OP_ENTRY(7A), OP_ENTRY(7B),
+    OP_ENTRY(7C), OP_ENTRY(7D), OP_ENTRY(7E), OP_ENTRY(7F),
+
+    OP_ENTRY(80), OP_ENTRY(81), OP_ENTRY(82), OP_ENTRY(83),
+    OP_ENTRY(84), OP_ENTRY(85), OP_ENTRY(86), OP_ENTRY(87),
+    OP_ENTRY(88), OP_ENTRY(89), OP_ENTRY(8A), OP_ENTRY(8B),
+    OP_ENTRY(8C), OP_ENTRY(8D), OP_ENTRY(8E), OP_ENTRY(8F),
+
+    OP_ENTRY(90), OP_ENTRY(91), OP_ENTRY(92), OP_ENTRY(93),
+    OP_ENTRY(94), OP_ENTRY(95), OP_ENTRY(96), OP_ENTRY(97),
+    OP_ENTRY(98), OP_ENTRY(99), OP_ENTRY(9A), OP_ENTRY(9B),
+    OP_ENTRY(9C), OP_ENTRY(9D), OP_ENTRY(9E), OP_ENTRY(9F),
+
+    OP_ENTRY(A0), OP_ENTRY(A1), OP_ENTRY(A2), OP_ENTRY(A3),
+    OP_ENTRY(A4), OP_ENTRY(A5), OP_ENTRY(A6), OP_ENTRY(A7),
+    OP_ENTRY(A8), OP_ENTRY(A9), OP_ENTRY(AA), OP_ENTRY(AB),
+    OP_ENTRY(AC), OP_ENTRY(AD), OP_ENTRY(AE), OP_ENTRY(AF),
+
+    OP_ENTRY(B0), OP_ENTRY(B1), OP_ENTRY(B2), OP_ENTRY(B3),
+    OP_ENTRY(B4), OP_ENTRY(B5), OP_ENTRY(B6), OP_ENTRY(B7),
+    OP_ENTRY(B8), OP_ENTRY(B9), OP_ENTRY(BA), OP_ENTRY(BB),
+    OP_ENTRY(BC), OP_ENTRY(BD), OP_ENTRY(BE), OP_ENTRY(BF),
+
+    OP_ENTRY(C0), OP_ENTRY(C1), OP_ENTRY(C2), OP_ENTRY(C3),
+    OP_ENTRY(C4), OP_ENTRY(C5), OP_ENTRY(C6), OP_ENTRY(C7),
+    OP_ENTRY(C8), OP_ENTRY(C9), OP_ENTRY(CA), OP_ENTRY(CB),
+    OP_ENTRY(CC), OP_ENTRY(CD), OP_ENTRY(CE), OP_ENTRY(CF),
+
+    OP_ENTRY(D0), OP_ENTRY(D1), OP_ENTRY(D2), OP_ENTRY(D3),
+    OP_ENTRY(D4), OP_ENTRY(D5), OP_ENTRY(D6), OP_ENTRY(D7),
+    OP_ENTRY(D8), OP_ENTRY(D9), OP_ENTRY(DA), OP_ENTRY(DB),
+    OP_ENTRY(DC), OP_ENTRY(DD), OP_ENTRY(DE), OP_ENTRY(DF),
+
+    OP_ENTRY(E0), OP_ENTRY(E1), OP_ENTRY(E2), OP_ENTRY(E3),
+    OP_ENTRY(E4), OP_ENTRY(E5), OP_ENTRY(E6), OP_ENTRY(E7),
+    OP_ENTRY(E8), OP_ENTRY(E9), OP_ENTRY(EA), OP_ENTRY(EB),
+    OP_ENTRY(EC), OP_ENTRY(ED), OP_ENTRY(EE), OP_ENTRY(EF),
+
+    OP_ENTRY(F0), OP_ENTRY(F1), OP_ENTRY(F2), OP_ENTRY(F3),
+    OP_ENTRY(F4), OP_ENTRY(F5), OP_ENTRY(F6), OP_ENTRY(F7),
+    OP_ENTRY(F8), OP_ENTRY(F9), OP_ENTRY(FA), OP_ENTRY(FB),
+    OP_ENTRY(FC), OP_ENTRY(FD), OP_ENTRY(FE), OP_ENTRY(FF),
 };
 
-instruction get_instruction(u8 byte) { return instruction_table[byte]; }
+void instruction_exec(u16 pc) {
+  u8 bytes = ram_read8(pc);
+  op_func instruction = instruction_table[bytes];
+  cpu_advance();
+  instruction();
+}
