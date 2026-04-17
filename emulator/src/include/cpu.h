@@ -70,4 +70,9 @@ void set_reg16(reg r, u16 val);
 void set_flag(u8 flag, bool to);
 bool get_flag(u8 flag);
 
+void enable_interrupts();
+void disable_interrupts();
+void request_enable_interrupts();
+bool pending_ei();
+
 #endif

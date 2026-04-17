@@ -4,6 +4,8 @@
 #include <commons/log.h>
 #include <stdlib.h>
 
+bool IME = 0;
+bool ei_pending = 0;
 regs registers = {0};
 
 t_config *cpu_config;
@@ -150,5 +152,16 @@ void cpu_init() {
 }
 
 void cpu_advance() { registers.PC++; }
+
+void enable_interrupts() {
+  IME = true;
+  ei_pending = false;
+}
+void request_enable_interrupts() { ei_pending = true; }
+void disable_interrupts() {
+  ei_pending = false;
+  IME = false;
+}
+bool pending_ei() { return ei_pending; };
 
 void cpu_free() { log_destroy(cpu_logger.logger); }

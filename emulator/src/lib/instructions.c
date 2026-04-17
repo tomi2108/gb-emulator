@@ -1,10 +1,13 @@
 #include "../include/instructions.h"
 #include <memory.h>
+#include <stdint.h>
 
 #define ZERO_FLAG 0b10000000
 #define SUB_FLAG 0b01000000
 #define HALF_CARRY_FLAG 0b00100000
 #define CARRY_FLAG 0b00010000
+
+typedef void (*op_func)(void);
 
 u16 stack_pop() {
   u16 sp = get_reg16(R_SP);
@@ -12,18 +15,25 @@ u16 stack_pop() {
   set_reg16(R_SP, sp + 2);
   return val;
 };
+
 void stack_push(u16 val) {
   u16 sp = get_reg16(R_SP);
   ram_write16(sp, val);
   set_reg16(R_SP, sp - 2);
 };
 
+void DI() { disable_interrupts(); }
+void EI() { request_enable_interrupts(); }
+
 void JP(u16 to) { set_reg16(R_PC, to); }
+void JR() {
+  int8_t offset = (int8_t)get_imm8();
+  JP(get_reg16(R_PC) + offset);
+}
 void POP(reg dest) { set_reg16(dest, stack_pop()); }
 void PUSH(reg dest) { stack_push(get_reg16(dest)); }
 void RET() { POP(R_PC); }
-void CALL() {
-  u16 dest = get_imm16();
+void CALL(u16 dest) {
   stack_push(get_reg16(R_PC));
   JP(dest);
 }
@@ -172,6 +182,7 @@ void DEC8(reg dest) {
 }
 
 #define OP_ENTRY(num) [0x##num] = op_##num
+#define CB_ENTRY(num) [0x##num] = cb_##num
 
 #define ROW_LOW(FN, MEM_FN, H, dest)                                           \
   FN(H##0, dest, R_B)                                                          \
@@ -295,10 +306,16 @@ void DEC8(reg dest) {
       JP(get_imm16());                                                         \
   }
 
+#define JR_CC(num, condition)                                                  \
+  void op_##num() {                                                            \
+    if (condition)                                                             \
+      JR();                                                                    \
+  }
+
 #define CALL_CC(num, condition)                                                \
   void op_##num() {                                                            \
     if (condition)                                                             \
-      CALL();                                                                  \
+      CALL(get_imm16());                                                       \
   }
 
 #define RET_CC(num, condition)                                                 \
@@ -306,6 +323,87 @@ void DEC8(reg dest) {
     if (condition)                                                             \
       RET();                                                                   \
   };
+
+#define RST(num, vector)                                                       \
+  void op_##num() { CALL(vector); };
+
+#define CB_ROW(base)                                                           \
+  CB_ENTRY(base##0), CB_ENTRY(base##1), CB_ENTRY(base##2), CB_ENTRY(base##3),  \
+      CB_ENTRY(base##4), CB_ENTRY(base##5), CB_ENTRY(base##6),                 \
+      CB_ENTRY(base##7), CB_ENTRY(base##8), CB_ENTRY(base##9),                 \
+      CB_ENTRY(base##A), CB_ENTRY(base##B), CB_ENTRY(base##C),                 \
+      CB_ENTRY(base##D), CB_ENTRY(base##E), CB_ENTRY(base##F)
+
+#define CB_LOW(base, logic_func, bit)                                          \
+  void cb_##base##0() { logic_func(R_B, bit); }                                \
+  void cb_##base##1() { logic_func(R_C, bit); }                                \
+  void cb_##base##2() { logic_func(R_D, bit); }                                \
+  void cb_##base##3() { logic_func(R_E, bit); }                                \
+  void cb_##base##4() { logic_func(R_H, bit); }                                \
+  void cb_##base##5() { logic_func(R_L, bit); }                                \
+  void cb_##base##6() { logic_func(R_HL, bit); }                               \
+  void cb_##base##7() { logic_func(R_A, bit); }
+
+#define CB_HIGH(base, logic_func, bit)                                         \
+  void cb_##base##8() { logic_func(R_B, bit); }                                \
+  void cb_##base##9() { logic_func(R_C, bit); }                                \
+  void cb_##base##A() { logic_func(R_D, bit); }                                \
+  void cb_##base##B() { logic_func(R_E, bit); }                                \
+  void cb_##base##C() { logic_func(R_H, bit); }                                \
+  void cb_##base##D() { logic_func(R_L, bit); }                                \
+  void cb_##base##E() { logic_func(R_HL, bit); }                               \
+  void cb_##base##F() { logic_func(R_A, bit); }
+
+void BIT(reg reg, u8 bit) {
+  u8 val;
+  if (reg == R_HL)
+    val = ram_read8(get_reg16(R_HL));
+  else
+    val = get_reg8(reg);
+
+  set_flag(ZERO_FLAG, !(val & (1 << bit)));
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, true);
+}
+
+CB_LOW(0, BIT, 0);
+CB_HIGH(0, BIT, 0);
+CB_LOW(1, BIT, 0);
+CB_HIGH(1, BIT, 0);
+CB_LOW(2, BIT, 0);
+CB_HIGH(2, BIT, 0);
+CB_LOW(3, BIT, 0);
+CB_HIGH(3, BIT, 0);
+CB_LOW(4, BIT, 0);
+CB_HIGH(4, BIT, 1);
+CB_LOW(5, BIT, 2);
+CB_HIGH(5, BIT, 3);
+CB_LOW(6, BIT, 4);
+CB_HIGH(6, BIT, 5);
+CB_LOW(7, BIT, 6);
+CB_HIGH(7, BIT, 7);
+CB_LOW(8, BIT, 0);
+CB_HIGH(8, BIT, 1);
+CB_LOW(9, BIT, 2);
+CB_HIGH(9, BIT, 3);
+CB_LOW(A, BIT, 4);
+CB_HIGH(A, BIT, 5);
+CB_LOW(B, BIT, 6);
+CB_HIGH(B, BIT, 7);
+CB_LOW(C, BIT, 0);
+CB_HIGH(C, BIT, 1);
+CB_LOW(D, BIT, 2);
+CB_HIGH(D, BIT, 3);
+CB_LOW(E, BIT, 4);
+CB_HIGH(E, BIT, 5);
+CB_LOW(F, BIT, 6);
+CB_HIGH(F, BIT, 7);
+
+op_func cb_instruction_table[0xF00] = {
+    CB_ROW(0), CB_ROW(1), CB_ROW(2), CB_ROW(3), CB_ROW(4), CB_ROW(5),
+    CB_ROW(6), CB_ROW(7), CB_ROW(8), CB_ROW(9), CB_ROW(A), CB_ROW(B),
+    CB_ROW(C), CB_ROW(D), CB_ROW(E), CB_ROW(F),
+};
 
 void op_00() {}
 LD_R16_N16(01, R_BC);
@@ -333,6 +431,7 @@ INC_R16(13, R_DE);
 INC_R8(14, R_D);
 DEC_R8(15, R_D);
 LD_R8_N8(16, R_D);
+JR_CC(18, true);
 ADD_HL_R16(19, R_DE);
 LD_A_R16(1A, R_DE);
 DEC_R16(1B, R_DE);
@@ -340,6 +439,7 @@ INC_R8(1C, R_E);
 DEC_R8(1D, R_E);
 LD_R8_N8(1E, R_E);
 
+JR_CC(20, !get_flag(ZERO_FLAG));
 LD_R16_N16(21, R_HL);
 void op_22() {
   u16 hl = get_reg16(R_HL);
@@ -350,6 +450,7 @@ INC_R16(23, R_HL);
 INC_R8(24, R_H);
 DEC_R8(25, R_H);
 LD_R8_N8(26, R_H);
+JR_CC(28, get_flag(ZERO_FLAG));
 ADD_HL_R16(29, R_HL);
 void op_2A() {
   u16 hl = get_reg16(R_HL);
@@ -361,7 +462,13 @@ DEC_R16(2B, R_HL);
 INC_R8(2C, R_L);
 DEC_R8(2D, R_L);
 LD_R8_N8(2E, R_L);
+void op_2F() {
+  set_reg8(R_A, ~get_reg8(R_A));
+  set_flag(SUB_FLAG, true);
+  set_flag(HALF_CARRY_FLAG, true);
+}
 
+JR_CC(30, !get_flag(CARRY_FLAG));
 LD_R16_N16(31, R_SP);
 void op_32() {
   u16 hl = get_reg16(R_HL);
@@ -390,6 +497,12 @@ void op_35() {
   set_flag(HALF_CARRY_FLAG, (val & 0xF) < (1 & 0xF));
 }
 void op_36() { ram_write8(get_reg16(R_HL), get_imm8()); }
+void op_37() {
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+  set_flag(CARRY_FLAG, true);
+}
+JR_CC(38, get_flag(CARRY_FLAG));
 ADD_HL_R16(39, R_SP);
 void op_3A() {
   u16 hl = get_reg16(R_HL);
@@ -401,6 +514,11 @@ DEC_R16(3B, R_SP);
 INC_R8(3C, R_A);
 DEC_R8(3D, R_A);
 LD_R8_N8(3E, R_A);
+void op_3F() {
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+  set_flag(CARRY_FLAG, !get_flag(CARRY_FLAG));
+}
 
 ROW_LOW(LD_R8_R8, LD_R8_HL, 4, R_B);
 ROW_HIGH(LD_R8_R8, LD_R8_HL, 4, R_C);
@@ -442,12 +560,18 @@ JP_CC(C3, true);
 CALL_CC(C4, !get_flag(ZERO_FLAG));
 PUSH_R16(C5, R_BC);
 void op_C6() { ADD8(R_A, get_imm8()); };
+RST(C7, 0x0000)
 RET_CC(C8, get_flag(ZERO_FLAG));
 RET_CC(C9, true);
 JP_CC(CA, get_flag(ZERO_FLAG));
+void op_CB() {
+  u8 imm8 = get_imm8();
+  cb_instruction_table[imm8]();
+}
 CALL_CC(CC, get_flag(ZERO_FLAG));
 CALL_CC(CD, true);
 void op_CE() { ADC(R_A, get_imm8()); };
+RST(CF, 0x0008)
 
 RET_CC(D0, !get_flag(CARRY_FLAG));
 POP_R16(D1, R_DE);
@@ -455,32 +579,40 @@ JP_CC(D2, !get_flag(CARRY_FLAG));
 CALL_CC(D4, !get_flag(CARRY_FLAG));
 PUSH_R16(D5, R_DE);
 void op_D6() { SUB(R_A, get_imm8()); };
+RST(D7, 0x0010)
 RET_CC(D8, get_flag(CARRY_FLAG));
+void op_D9() {
+  RET();
+  enable_interrupts();
+}
 JP_CC(DA, get_flag(CARRY_FLAG));
 CALL_CC(DC, get_flag(CARRY_FLAG));
 void op_DE() { SBC(R_A, get_imm8()); };
+RST(DF, 0x0018)
 
 void op_E0() { ram_write8(0xFF00 | get_imm8(), get_reg8(R_A)); }
 POP_R16(E1, R_HL);
 void op_E2() { ram_write8(0xFF00 | get_reg8(R_C), get_reg8(R_A)); }
 PUSH_R16(E5, R_HL);
 void op_E6() { AND(R_A, get_imm8()); };
+RST(E7, 0x0020)
 void op_E8() { E8(R_SP); }
 void op_E9() { JP(get_reg16(R_HL)); }
 void op_EA() { ram_write8(get_imm16(), get_reg8(R_A)); }
 void op_EE() { XOR(R_A, get_imm8()); };
+RST(EF, 0x0028)
 
 void op_F0() { set_reg8(R_A, ram_read8(0xFF00 | get_imm8())); }
 POP_R16(F1, R_AF);
 void op_F2() { set_reg8(R_A, ram_read8(0xFF00 | get_reg8(R_C))); }
 PUSH_R16(F5, R_AF);
 void op_F6() { OR(R_A, get_imm8()); };
+RST(F7, 0x0030)
 void op_F8() { E8(R_HL); }
 void op_F9() { set_reg16(R_SP, get_reg16(R_HL)); }
 void op_FA() { set_reg8(R_A, ram_read8(get_imm16())); }
 void op_FE() { CP(R_A, get_imm8()); };
-
-typedef void (*op_func)(void);
+RST(FF, 0x0038)
 
 op_func instruction_table[] = {
     OP_ENTRY(00), OP_ENTRY(01), OP_ENTRY(02), OP_ENTRY(03),
@@ -566,6 +698,10 @@ op_func instruction_table[] = {
 
 void instruction_exec(u16 pc) {
   u8 bytes = ram_read8(pc);
+
+  if (pending_ei())
+    enable_interrupts();
+
   op_func instruction = instruction_table[bytes];
   cpu_advance();
   instruction();
