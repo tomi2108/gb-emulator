@@ -21,6 +21,12 @@ void stack_push(u16 val) {
 void JP(u16 to) { set_reg16(R_PC, to); }
 void POP(reg dest) { set_reg16(dest, stack_pop()); }
 void PUSH(reg dest) { stack_push(get_reg16(dest)); }
+void RET() { POP(R_PC); }
+void CALL() {
+  u16 dest = get_imm16();
+  stack_push(get_reg16(R_PC));
+  JP(dest);
+}
 
 void E8(reg dest) {
   u8 imm = get_imm8();
@@ -283,6 +289,24 @@ void DEC8(reg dest) {
 #define PUSH_R16(num, dest)                                                    \
   void op_##num() { PUSH(dest); };
 
+#define JP_CC(num, condition)                                                  \
+  void op_##num() {                                                            \
+    if (condition)                                                             \
+      JP(get_imm16());                                                         \
+  }
+
+#define CALL_CC(num, condition)                                                \
+  void op_##num() {                                                            \
+    if (condition)                                                             \
+      CALL();                                                                  \
+  }
+
+#define RET_CC(num, condition)                                                 \
+  void op_##num() {                                                            \
+    if (condition)                                                             \
+      RET();                                                                   \
+  };
+
 void op_00() {}
 LD_R16_N16(01, R_BC);
 LD_R16_A(02, R_BC);
@@ -411,34 +435,42 @@ ROW_HIGH(XOR_R8_R8, XOR_R8_HL, A, R_A);
 ROW_LOW(OR_R8_R8, OR_R8_HL, B, R_A);
 ROW_HIGH(CP_R8_R8, CP_R8_HL, B, R_A);
 
+RET_CC(C0, !get_flag(ZERO_FLAG));
 POP_R16(C1, R_BC);
-void op_C3() { JP(get_imm16()); };
+JP_CC(C2, !get_flag(ZERO_FLAG));
+JP_CC(C3, true);
+CALL_CC(C4, !get_flag(ZERO_FLAG));
 PUSH_R16(C5, R_BC);
 void op_C6() { ADD8(R_A, get_imm8()); };
-void op_CD() {
-  u16 dest = get_imm16();
-  stack_push(get_reg16(R_PC));
-  JP(dest);
-};
+RET_CC(C8, get_flag(ZERO_FLAG));
+RET_CC(C9, true);
+JP_CC(CA, get_flag(ZERO_FLAG));
+CALL_CC(CC, get_flag(ZERO_FLAG));
+CALL_CC(CD, true);
 void op_CE() { ADC(R_A, get_imm8()); };
 
+RET_CC(D0, !get_flag(CARRY_FLAG));
 POP_R16(D1, R_DE);
-void op_D6() { SUB(R_A, get_imm8()); };
+JP_CC(D2, !get_flag(CARRY_FLAG));
+CALL_CC(D4, !get_flag(CARRY_FLAG));
 PUSH_R16(D5, R_DE);
+void op_D6() { SUB(R_A, get_imm8()); };
+RET_CC(D8, get_flag(CARRY_FLAG));
+JP_CC(DA, get_flag(CARRY_FLAG));
+CALL_CC(DC, get_flag(CARRY_FLAG));
 void op_DE() { SBC(R_A, get_imm8()); };
 
 void op_E0() { ram_write8(0xFF00 | get_imm8(), get_reg8(R_A)); }
-
 POP_R16(E1, R_HL);
 void op_E2() { ram_write8(0xFF00 | get_reg8(R_C), get_reg8(R_A)); }
 PUSH_R16(E5, R_HL);
 void op_E6() { AND(R_A, get_imm8()); };
 void op_E8() { E8(R_SP); }
+void op_E9() { JP(get_reg16(R_HL)); }
 void op_EA() { ram_write8(get_imm16(), get_reg8(R_A)); }
 void op_EE() { XOR(R_A, get_imm8()); };
 
 void op_F0() { set_reg8(R_A, ram_read8(0xFF00 | get_imm8())); }
-
 POP_R16(F1, R_AF);
 void op_F2() { set_reg8(R_A, ram_read8(0xFF00 | get_reg8(R_C))); }
 PUSH_R16(F5, R_AF);
