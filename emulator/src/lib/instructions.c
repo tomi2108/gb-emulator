@@ -354,26 +354,148 @@ void DEC8(reg dest) {
   void cb_##base##E() { logic_func(R_HL, bit); }                               \
   void cb_##base##F() { logic_func(R_A, bit); }
 
-void BIT(reg reg, u8 bit) {
-  u8 val;
+u8 get_reg8_or_hl(reg reg) {
   if (reg == R_HL)
-    val = ram_read8(get_reg16(R_HL));
+    return ram_read8(get_reg16(R_HL));
   else
-    val = get_reg8(reg);
+    return get_reg8(reg);
+}
+void set_reg8_or_hl(reg reg, u8 to) {
+  if (reg == R_HL)
+    ram_write8(get_reg16(R_HL), to);
+  else
+    set_reg8(reg, to);
+}
 
-  set_flag(ZERO_FLAG, !(val & (1 << bit)));
+void SET(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  u8 res = val | (0b1 << bit);
+  set_reg8_or_hl(reg, res);
+}
+
+void RES(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  u8 res = val & ~(0b1 << bit);
+  set_reg8_or_hl(reg, res);
+}
+
+void BIT(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  set_flag(ZERO_FLAG, !(val & (0x01 << bit)));
   set_flag(SUB_FLAG, false);
   set_flag(HALF_CARRY_FLAG, true);
 }
 
-CB_LOW(0, BIT, 0);
-CB_HIGH(0, BIT, 0);
-CB_LOW(1, BIT, 0);
-CB_HIGH(1, BIT, 0);
-CB_LOW(2, BIT, 0);
-CB_HIGH(2, BIT, 0);
-CB_LOW(3, BIT, 0);
-CB_HIGH(3, BIT, 0);
+void RLC(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  bool shifted = val & 0x80;
+  u8 res = (val << 1) | shifted;
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void RL(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  bool carry = get_flag(CARRY_FLAG);
+  bool shifted = val & 0x80;
+  u8 res = (val << 1) | carry;
+
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void RRC(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  bool shifted = val & 0x01;
+  u8 res = (val >> 1) | (shifted << 0x7);
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void RR(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  bool carry = get_flag(CARRY_FLAG);
+  bool shifted = val & 0x01;
+  u8 res = (val >> 1) | (carry << 0x7);
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void SRA(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  bool shifted = val & 0x01;
+  u8 res = val >> 1;
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void SLA(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+  bool shifted = val & 0x80;
+  u8 res = val << 1;
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void SRL(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+
+  bool shifted = val & 0x1;
+  u8 res = val >> 1;
+  set_reg8_or_hl(reg, res);
+
+  set_flag(CARRY_FLAG, shifted);
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+}
+
+void SWAP(reg reg, u8 bit) {
+  u8 val = get_reg8_or_hl(reg);
+
+  u8 lower = val & 0x0F;
+  u8 higher = val & 0xF0;
+  u8 res = (lower << 0x4) | (higher >> 0x4);
+  set_reg8_or_hl(reg, res);
+
+  set_flag(ZERO_FLAG, res == 0x00);
+  set_flag(SUB_FLAG, false);
+  set_flag(HALF_CARRY_FLAG, false);
+  set_flag(CARRY_FLAG, false);
+}
+
+CB_LOW(0, RLC, 0);
+CB_HIGH(0, RRC, 0);
+CB_LOW(1, RL, 0);
+CB_HIGH(1, RR, 0);
+CB_LOW(2, SLA, 0);
+CB_HIGH(2, SRA, 0);
+CB_LOW(3, SWAP, 0);
+CB_HIGH(3, SRL, 0);
 CB_LOW(4, BIT, 0);
 CB_HIGH(4, BIT, 1);
 CB_LOW(5, BIT, 2);
@@ -382,22 +504,22 @@ CB_LOW(6, BIT, 4);
 CB_HIGH(6, BIT, 5);
 CB_LOW(7, BIT, 6);
 CB_HIGH(7, BIT, 7);
-CB_LOW(8, BIT, 0);
-CB_HIGH(8, BIT, 1);
-CB_LOW(9, BIT, 2);
-CB_HIGH(9, BIT, 3);
-CB_LOW(A, BIT, 4);
-CB_HIGH(A, BIT, 5);
-CB_LOW(B, BIT, 6);
-CB_HIGH(B, BIT, 7);
-CB_LOW(C, BIT, 0);
-CB_HIGH(C, BIT, 1);
-CB_LOW(D, BIT, 2);
-CB_HIGH(D, BIT, 3);
-CB_LOW(E, BIT, 4);
-CB_HIGH(E, BIT, 5);
-CB_LOW(F, BIT, 6);
-CB_HIGH(F, BIT, 7);
+CB_LOW(8, RES, 0);
+CB_HIGH(8, RES, 1);
+CB_LOW(9, RES, 2);
+CB_HIGH(9, RES, 3);
+CB_LOW(A, RES, 4);
+CB_HIGH(A, RES, 5);
+CB_LOW(B, SET, 6);
+CB_HIGH(B, SET, 7);
+CB_LOW(C, SET, 0);
+CB_HIGH(C, SET, 1);
+CB_LOW(D, SET, 2);
+CB_HIGH(D, SET, 3);
+CB_LOW(E, SET, 4);
+CB_HIGH(E, SET, 5);
+CB_LOW(F, SET, 6);
+CB_HIGH(F, SET, 7);
 
 op_func cb_instruction_table[0xF00] = {
     CB_ROW(0), CB_ROW(1), CB_ROW(2), CB_ROW(3), CB_ROW(4), CB_ROW(5),
